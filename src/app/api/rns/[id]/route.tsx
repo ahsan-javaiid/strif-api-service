@@ -10,6 +10,7 @@ const stripHexPrefix = (hex: string) => hex.slice(2);
 
 const RNS_REGISTRY_ABI = [
   "function resolver(bytes32 node) public view returns (address)",
+  "function ttl(bytes32 node) public view returns (uint64)",
 ];
 
 const RNS_ADDR_RESOLVER_ABI = [
@@ -32,7 +33,6 @@ const lookupName = async (address: string) => {
   try {
 
     const reverseRecordHash = utils.namehash(`${stripHexPrefix(address)}.addr.reverse`);
-
     const resolverAddress = await rnsRegistryContract.resolver(reverseRecordHash);
   
     if (resolverAddress === constants.AddressZero) {
@@ -58,6 +58,11 @@ const lookupName = async (address: string) => {
   }
 };
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
 
 export const GET = async (req: any, context: any) => { 
   const { params } = context;
@@ -68,5 +73,5 @@ export const GET = async (req: any, context: any) => {
       rnsName: resolvedName,
       registered: resolvedName ? true: false 
     }
-  }, { status: 200});
+  }, { status: 200, headers: corsHeaders });
 }
