@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { providers, constants, utils, Contract } from 'ethers';
+import cors from '../../../lib/cors';
 
 const ROOTSTOCK_RPC_NODE = "https://public-node.rsk.co";
 
@@ -74,4 +75,13 @@ export const GET = async (req: any, context: any) => {
       registered: resolvedName ? true: false 
     }
   }, { status: 200, headers: corsHeaders });
+}
+
+export async function OPTIONS(request: Request) {
+  return cors(
+    request,
+    new Response(null, {
+      status: 204,
+    })
+  );
 }
