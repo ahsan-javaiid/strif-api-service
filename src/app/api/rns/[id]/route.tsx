@@ -65,14 +65,66 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
+const checkRNSTx = async (address: string) => {
+  let found = false; 
+  const response = await fetch(`https://api.covalenthq.com/v1/rsk-mainnet/address/${address}/transactions_v3/?key=${process.env.APIKEY}`);
+  if (response.ok) {
+    const transactions =  await response.json();
+
+    for (const item of transactions.data.items) {
+      if (item.successful && item.to_address && item.to_address.toLowerCase() === '0xD9C79ced86ecF49F5E4a973594634C83197c35ab'.toLowerCase()) {
+        found = true;
+      }
+    }
+
+    return Promise.resolve(found);
+  } else {
+    const error = await response.json();
+    console.log('error in fetching tx:', error);
+    return Promise.resolve(found);
+  }
+}
+
+// const checkRNSTx = async (address: string) => {
+//   let found = false; 
+//   const response = await fetch(`https://rootstock.blockscout.com/api/v2/addresses/${address.toLowerCase()}/transactions`);
+//   if (response.ok) {
+//     console.log(response);
+//     const transactions =  await response.json();
+//     console.log('tx:', transactions);
+    
+//     for (const item of transactions.items) {
+//       if (item.status === 'ok' && item.method === 'commit' && item.to && item.to.hash === '0xD9C79ced86ecF49F5E4a973594634C83197c35ab') {
+//         found = true;
+//       }
+//     }
+
+//     return Promise.resolve(found);
+//   } else {
+//     const error = await response.json();
+//     console.log('error in fetching tx:', error);
+//     return Promise.resolve(found);
+//   }
+// }
+
 export const GET = async (req: any, context: any) => { 
   const { params } = context;
-  const resolvedName = await lookupName(params.id);
+  let resolvedName = await lookupName(params.id);
+
+  let foundRNSContractInteraction = false;
   
+  if (!resolvedName) {
+    foundRNSContractInteraction = await checkRNSTx(params.id);
+  }
+  
+  if (foundRNSContractInteraction) {
+    resolvedName = '*.rsk'; // We don't know the name exactly but it's registered.
+  }
+
   return NextResponse.json({
     data: {
       rnsName: resolvedName,
-      registered: resolvedName ? true: false 
+      registered: resolvedName || foundRNSContractInteraction ? true: false 
     }
   }, { status: 200, headers: corsHeaders });
 }
