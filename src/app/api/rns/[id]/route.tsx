@@ -65,65 +65,59 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-const checkRNSTx = async (address: string) => {
-  let found = false; 
-  const response = await fetch(`https://api.covalenthq.com/v1/rsk-mainnet/address/${address}/transactions_v3/?key=${process.env.APIKEY}`);
-  if (response.ok) {
-    const transactions =  await response.json();
+const getCovalentPage = async (link: string): Promise<any> => {
+  try {
+    const response = await fetch(`${link}?key=${process.env.APIKEY}`);
+    
+    if (response.ok) {
+      const transactions =  await response.json();
+      const links = transactions.data.links;
+      const tx = transactions.data.items.find((item: any) => item.successful && item.to_address && item.to_address.toLowerCase() === '0xD9C79ced86ecF49F5E4a973594634C83197c35ab'.toLowerCase());
 
-    for (const item of transactions.data.items) {
-      if (item.successful && item.to_address && item.to_address.toLowerCase() === '0xD9C79ced86ecF49F5E4a973594634C83197c35ab'.toLowerCase()) {
-        found = true;
+      if (tx) {
+        return Promise.resolve(true);
+      } else if (links.prev) {
+        // Recursively check all pages
+        return await getCovalentPage(links.prev);
+      } else {
+        return Promise.resolve(false);
       }
+
+    } else {
+      const error = await response.json();
+      console.log('error in fetching tx:', error);
+      return Promise.resolve(false);
     }
 
-    return Promise.resolve(found);
-  } else {
-    const error = await response.json();
-    console.log('error in fetching tx:', error);
-    return Promise.resolve(found);
+  } catch (e) {
+    console.log('error calling api: ', e);
+    return Promise.resolve(false);
   }
 }
 
-// const checkRNSTx = async (address: string) => {
-//   let found = false; 
-//   const response = await fetch(`https://rootstock.blockscout.com/api/v2/addresses/${address.toLowerCase()}/transactions`);
-//   if (response.ok) {
-//     console.log(response);
-//     const transactions =  await response.json();
-//     console.log('tx:', transactions);
-    
-//     for (const item of transactions.items) {
-//       if (item.status === 'ok' && item.method === 'commit' && item.to && item.to.hash === '0xD9C79ced86ecF49F5E4a973594634C83197c35ab') {
-//         found = true;
-//       }
-//     }
+const checkRNSTx = async (address: string) => {
+  try {
 
-//     return Promise.resolve(found);
-//   } else {
-//     const error = await response.json();
-//     console.log('error in fetching tx:', error);
-//     return Promise.resolve(found);
-//   }
-// }
+    const link = `https://api.covalenthq.com/v1/rsk-mainnet/address/${address}/transactions_v3/`;
+    
+    return await getCovalentPage(link);
+  } catch (e) {
+    console.log('error calling api: ', e);
+    return Promise.resolve(false);
+  }
+}
 
 export const GET = async (req: any, context: any) => { 
   const { params } = context;
-  let resolvedName = await lookupName(params.id);
 
-  let foundRNSContractInteraction = false;
-  
-  if (!resolvedName) {
-    foundRNSContractInteraction = await checkRNSTx(params.id);
-  }
-  
-  if (foundRNSContractInteraction) {
-    resolvedName = '*.rsk'; // We don't know the name exactly but it's registered.
-  }
+  const [resolvedName, foundRNSContractInteraction] = await Promise.all([
+    lookupName(params.id),
+    checkRNSTx(params.id)
+  ]);
 
   return NextResponse.json({
     data: {
-      rnsName: resolvedName,
+      rnsName: resolvedName ? resolvedName: foundRNSContractInteraction ? '*.rsk': null,
       registered: resolvedName || foundRNSContractInteraction ? true: false 
     }
   }, { status: 200, headers: corsHeaders });
