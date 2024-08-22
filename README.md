@@ -3,7 +3,15 @@ This service provides api to resolve wallet address to rns names.
 
 API:  http://localhost:3000/api/rns/0xA78C937844b27Bec024f042DCbe5b85D2B7344F6
 
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+## Architecture
+
+This api works as an aggregator to check following sources for rns name lookup.
+
+1) RNS contract 
+2) Covalent Indexer
+3) Blockscout Indexer
+
+Finally api calculates and returns best answer from above sources. In future add more provider so that not to rely on single provider. 
 
 ## Getting Started
 

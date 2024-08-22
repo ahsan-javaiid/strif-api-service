@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { providers, constants, utils, Contract } from 'ethers';
 import cors from '../../../lib/cors';
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
 const ROOTSTOCK_RPC_NODE = "https://public-node.rsk.co";
 
 // REF: https://developers.rsk.co/rif/rns/architecture/registry/
@@ -12,10 +18,6 @@ const stripHexPrefix = (hex: string) => hex.slice(2);
 const RNS_REGISTRY_ABI = [
   "function resolver(bytes32 node) public view returns (address)",
   "function ttl(bytes32 node) public view returns (uint64)",
-];
-
-const RNS_ADDR_RESOLVER_ABI = [
-  "function addr(bytes32 node) public view returns (address)",
 ];
 
 const RNS_NAME_RESOLVER_ABI = [
@@ -30,14 +32,13 @@ const rnsRegistryContract = new Contract(
 );
 
 
-const lookupName = async (address: string) => {
+const lookupNameRnsContract = async (address: string) => {
   try {
-
     const reverseRecordHash = utils.namehash(`${stripHexPrefix(address)}.addr.reverse`);
     const resolverAddress = await rnsRegistryContract.resolver(reverseRecordHash);
   
     if (resolverAddress === constants.AddressZero) {
-      return null;
+      return { rnsName: null, registered: false };
     }
   
     const nameResolverContract = new Contract(
@@ -45,24 +46,16 @@ const lookupName = async (address: string) => {
       RNS_NAME_RESOLVER_ABI,
       RNSProvider,
     );
-  
     const name = await nameResolverContract.name(reverseRecordHash);
   
     if (name === undefined) {
-      return null;
+      return { rnsName: null, registered: false };
     }
   
-    return name;
+    return { rnsName: name, registered: true };
   } catch(e) {
-    console.log('error', e);
-    return null;
+    return { rnsName: null, registered: false };
   }
-};
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
 const getCovalentPage = async (link: string): Promise<any> => {
@@ -75,51 +68,73 @@ const getCovalentPage = async (link: string): Promise<any> => {
       const tx = transactions.data.items.find((item: any) => item.successful && item.to_address && item.to_address.toLowerCase() === '0xD9C79ced86ecF49F5E4a973594634C83197c35ab'.toLowerCase());
 
       if (tx) {
-        return Promise.resolve(true);
+        return Promise.resolve({ rnsName: '*.rsk', registered: true });
       } else if (links.prev) {
-        // Recursively check all pages
+        // Recursively check all pages if not found in current page
         return await getCovalentPage(links.prev);
       } else {
-        return Promise.resolve(false);
+        return Promise.resolve({ rnsName: null, registered: false });
       }
 
     } else {
-      const error = await response.json();
-      console.log('error in fetching tx:', error);
-      return Promise.resolve(false);
+      return Promise.resolve({ rnsName: null, registered: false });
     }
 
   } catch (e) {
-    console.log('error calling api: ', e);
-    return Promise.resolve(false);
+    return Promise.resolve({ rnsName: null, registered: false });
   }
 }
 
-const checkRNSTx = async (address: string) => {
+const lookupCovalentIndexer = async (address: string) => {
   try {
-
     const link = `https://api.covalenthq.com/v1/rsk-mainnet/address/${address}/transactions_v3/`;
     
     return await getCovalentPage(link);
   } catch (e) {
-    console.log('error calling api: ', e);
-    return Promise.resolve(false);
+    return Promise.resolve({ rnsName: null, registered: false });
+  }
+}
+
+const lookupBlockscoutIndexer = async (address: string) => {
+  try {
+    const link = `https://bens.services.blockscout.com/api/v1/30/addresses:lookup?address=${address}&resolved_to=true&owned_by=true&only_active=true&order=ASC`;
+    const response = await fetch(link);
+    
+    if (response.ok && response.status === 200) {
+      const data =  await response.json();
+
+      if (data.items && data.items.length > 0) {
+        const [item] = data.items;
+        
+        return Promise.resolve({ rnsName: item.name, registered: true });
+      } else {
+        return Promise.resolve({ rnsName: null, registered: false });
+      }
+
+    } else {
+      return Promise.resolve({ rnsName: null, registered: false });
+    }
+
+  } catch (e) {
+    return Promise.resolve({ rnsName: null, registered: false });
   }
 }
 
 export const GET = async (req: any, context: any) => { 
   const { params } = context;
 
-  const [resolvedName, foundRNSContractInteraction] = await Promise.all([
-    lookupName(params.id),
-    checkRNSTx(params.id)
+  const resolved = await Promise.all([
+    lookupNameRnsContract(params.id),
+    lookupCovalentIndexer(params.id),
+    lookupBlockscoutIndexer(params.id)
   ]);
 
+  const resolvedProviders = resolved.filter((item) => item.registered);
+
+  const data = resolvedProviders.find((item: any) => item.rnsName !== '*.rsk') ?? resolvedProviders.find(item => item.rnsName);
+
   return NextResponse.json({
-    data: {
-      rnsName: resolvedName ? resolvedName: foundRNSContractInteraction ? '*.rsk': null,
-      registered: resolvedName || foundRNSContractInteraction ? true: false 
-    }
+    data
   }, { status: 200, headers: corsHeaders });
 }
 
