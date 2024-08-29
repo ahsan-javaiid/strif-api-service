@@ -1,17 +1,14 @@
 ## Description
-This service provides api to resolve wallet address to rns names. 
+Stacking RIF service 
 
-API:  http://localhost:3000/api/rns/0xA78C937844b27Bec024f042DCbe5b85D2B7344F6
+API:  http://localhost:3000/api/strif/0x5DfDAF79c30282409F3b545C072e2397cb9F9F6B
 
 ## Architecture
 
-This api works as an aggregator to check following sources for rns name lookup.
+This api queries the st rif stacking contract at: 
+1) testnet: 0xD6Eb12591559C42e28d672197265b331B1Ad867d
+2) mainnet: todo
 
-1) RNS contract 
-2) Covalent Indexer
-3) Blockscout Indexer
-
-Finally api calculates and returns best answer from above sources. In future add more provider so that not to rely on single provider. 
 
 ## Getting Started
 
