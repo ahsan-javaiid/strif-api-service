@@ -9,12 +9,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-const ROOTSTOCK_RPC_NODE = "https://public-node.testnet.rsk.co";
+const ROOTSTOCK_RPC_NODE = "https://public-node.rsk.co";
 
 const rskProvider = new providers.JsonRpcProvider(ROOTSTOCK_RPC_NODE);
 
 
-const stRif = '0xD6Eb12591559C42e28d672197265b331B1Ad867d'.toLowerCase();
+// const stRif = '0xD6Eb12591559C42e28d672197265b331B1Ad867d'.toLowerCase();
+const stRif = '0x5db91e24bd32059584bbdb831a901f1199f3d459'.toLowerCase();
 
 const STRIFTokenContract = new Contract(stRif, abi, rskProvider);
 
@@ -114,7 +115,7 @@ export const GET = async (req: any, context: any) => {
       stackedBalanceUSD: rifValue * parseFloat(balance),
       totalSupply: parseFloat(supply),
       votingPower: parseFloat(votingPower),
-      network: 'testnet'
+      network: 'mainnet'
     }
   }, { status: 200, headers: corsHeaders });
 }
