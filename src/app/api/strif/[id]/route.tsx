@@ -10,6 +10,7 @@ const corsHeaders = {
 };
 
 const ROOTSTOCK_RPC_NODE = "https://public-node.rsk.co";
+//const ROOTSTOCK_RPC_NODE = "http: https://rpc.mainnet.rootstock.io/kXhXHf6TnnfW1POvr4UT0YUvujmuju-M";
 
 const rskProvider = new providers.JsonRpcProvider(ROOTSTOCK_RPC_NODE);
 
@@ -93,6 +94,102 @@ function isValidAddress(address: string) {
   return /^0x[0-9a-fA-F]{40}$/.test(address)
 }
 
+
+
+const lookupBlockscoutIndexer = async (address: string, retry: number, next: any, acc: any = []) => {
+  try {
+    let q = '';
+    if (next) {
+        q = `&block_numbeer=${next.next_page_params.block_number}&index=${next.index}`;
+    }
+
+    const link = `https://rootstock.blockscout.com/api/v2/addresses/${address}/transactions?${q}`;
+   
+   
+    console.log(link);
+    const response = await fetch(link);
+    
+    if (response.ok && response.status === 200) {
+      const data =  await response.json();
+
+      const newItems = acc.concat(data.items);
+
+      if (data.next_page_params) {
+        return await lookupBlockscoutIndexer(address, --retry, data.next_page_params, newItems);
+      }
+
+
+      return Promise.resolve({ items: newItems, status: 'ok' });
+
+    } else {
+      if (retry === 0) {
+        return Promise.resolve({ items: acc, status: 'error' });
+      } 
+      // retry 
+      return await lookupBlockscoutIndexer(address, --retry, next, acc);
+    }
+
+  } catch (e) {
+    return Promise.resolve({ items: [], status: 'error' });
+  }
+}
+
+const datesDiffInDays = (start: Date, end: Date) => {
+  const total = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+  return  Math.round(total);
+}
+
+const getHoldingPeriod = async (address: string) => {
+  const data = await lookupBlockscoutIndexer(address, 3, '', []);
+
+  let holdingPeriodDays: any = [0];
+  let date: null | Date = null;
+
+  data.items.reverse().forEach((item: any) => {
+    if (item.to && item.to.hash && item.to.hash.toLowerCase() === stRif.toLowerCase()) {
+
+      if (item.method === 'depositAndDelegate') {
+        // save mint date
+        date = new Date(item.timestamp);
+      }
+  
+      if (item.method === 'withdrawTo') {
+        // 
+        const withdrawDate = new Date(item.timestamp);
+  
+        if (date) {
+          const days = datesDiffInDays(date, withdrawDate);
+  
+          holdingPeriodDays.push(days);
+        }
+  
+      }
+
+      if (item.method === 'transfer') {
+        //
+        const transferDate = new Date(item.timestamp);
+  
+        if (date) {
+          const days = datesDiffInDays(date, transferDate);
+  
+          holdingPeriodDays.push(days);
+        }
+  
+      }
+    }
+
+  });
+
+  if (date && holdingPeriodDays.length === 1) {
+    const days = datesDiffInDays(date, new Date());
+  
+    holdingPeriodDays.push(days);
+  }
+
+  return Math.max(...holdingPeriodDays);
+}
+
+
 export const GET = async (req: any, context: any) => { 
   const { params } = context;
 
@@ -102,16 +199,18 @@ export const GET = async (req: any, context: any) => {
     }, { status: 200, headers: corsHeaders });
   }
 
-  const [balance, supply, votingPower, rifValue] = await Promise.all([
+  const [balance, supply, votingPower, rifValue, holdingPeriodDays] = await Promise.all([
     balaneOfStRif(params.id),
     totalSupply(),
     getVotes(params.id),
-    rifToUSD()
+    rifToUSD(),
+    getHoldingPeriod(params.id)
   ]);
 
   return NextResponse.json({
     data: {
       stackedBalance: parseFloat(balance),
+      holdingPeriodDays: holdingPeriodDays,
       stackedBalanceUSD: rifValue * parseFloat(balance),
       totalSupply: parseFloat(supply),
       votingPower: parseFloat(votingPower),
