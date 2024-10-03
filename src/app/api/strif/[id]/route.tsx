@@ -108,7 +108,7 @@ const lookupBlockscoutIndexer = async (address: string, retry: number, next: any
    
     console.log(link);
     const response = await fetch(link);
-    
+    console.log('response: ', response.status);
     if (response.ok && response.status === 200) {
       const data =  await response.json();
 
@@ -141,7 +141,8 @@ const datesDiffInDays = (start: Date, end: Date) => {
 }
 
 const getHoldingPeriod = async (address: string) => {
-  const data = await lookupBlockscoutIndexer(address, 3, '', []);
+  const retryCount = 10;
+  const data = await lookupBlockscoutIndexer(address, retryCount, '', []);
 
   let holdingPeriodDays: any = [0];
   let date: null | Date = null;
@@ -150,13 +151,13 @@ const getHoldingPeriod = async (address: string) => {
     if (item.to && item.to.hash && item.to.hash.toLowerCase() === stRif.toLowerCase()) {
 
       if (item.method === 'depositAndDelegate') {
-        console.log('depositAndDelegate', item.timestamp);
+        //console.log('depositAndDelegate', item.timestamp);
         // save mint date
         date = new Date(item.timestamp);
       }
   
       if (item.method === 'withdrawTo') {
-        console.log('withdrawTo', item.timestamp);
+        //console.log('withdrawTo', item.timestamp);
         // 
         const withdrawDate = new Date(item.timestamp);
   
@@ -169,7 +170,7 @@ const getHoldingPeriod = async (address: string) => {
       }
 
       if (item.method === 'transfer') {
-        console.log('transfer', item.timestamp);
+        // console.log('transfer', item.timestamp);
         //
         const transferDate = new Date(item.timestamp);
   
@@ -211,10 +212,12 @@ export const GET = async (req: any, context: any) => {
     getHoldingPeriod(params.id)
   ]);
 
+  const stakingBalance = parseFloat(balance);
+
   return NextResponse.json({
     data: {
-      stackedBalance: parseFloat(balance),
-      holdingPeriodDays: holdingPeriodDays,
+      stackedBalance: stakingBalance,
+      holdingPeriodDays: stakingBalance === 0 ? 0: holdingPeriodDays,
       stackedBalanceUSD: rifValue * parseFloat(balance),
       totalSupply: parseFloat(supply),
       votingPower: parseFloat(votingPower),
