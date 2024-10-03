@@ -99,8 +99,8 @@ function isValidAddress(address: string) {
 const lookupBlockscoutIndexer = async (address: string, retry: number, next: any, acc: any = []) => {
   try {
     let q = '';
-    if (next) {
-        q = `&block_numbeer=${next.next_page_params.block_number}&index=${next.index}`;
+    if (next && next.block_number) {
+        q = `&block_numbeer=${next.block_number}&index=${next.index}`;
     }
 
     const link = `https://rootstock.blockscout.com/api/v2/addresses/${address}/transactions?${q}`;
@@ -126,10 +126,11 @@ const lookupBlockscoutIndexer = async (address: string, retry: number, next: any
         return Promise.resolve({ items: acc, status: 'error' });
       } 
       // retry 
-      return await lookupBlockscoutIndexer(address, --retry, next, acc);
+      return await lookupBlockscoutIndexer(address, retry - 1, next, acc);
     }
 
   } catch (e) {
+    console.log('this should not execute:', e);
     return Promise.resolve({ items: [], status: 'error' });
   }
 }
@@ -149,11 +150,13 @@ const getHoldingPeriod = async (address: string) => {
     if (item.to && item.to.hash && item.to.hash.toLowerCase() === stRif.toLowerCase()) {
 
       if (item.method === 'depositAndDelegate') {
+        console.log('depositAndDelegate', item.timestamp);
         // save mint date
         date = new Date(item.timestamp);
       }
   
       if (item.method === 'withdrawTo') {
+        console.log('withdrawTo', item.timestamp);
         // 
         const withdrawDate = new Date(item.timestamp);
   
@@ -166,6 +169,7 @@ const getHoldingPeriod = async (address: string) => {
       }
 
       if (item.method === 'transfer') {
+        console.log('transfer', item.timestamp);
         //
         const transferDate = new Date(item.timestamp);
   
