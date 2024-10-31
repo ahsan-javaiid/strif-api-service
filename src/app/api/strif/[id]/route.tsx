@@ -100,7 +100,7 @@ const lookupBlockscoutIndexer = async (address: string, retry: number, next: any
   try {
     let q = '';
     if (next && next.block_number) {
-        q = `&block_numbeer=${next.block_number}&index=${next.index}`;
+        q = `&block_number=${next.block_number}&index=${next.index}`;
     }
 
     const link = `https://rootstock.blockscout.com/api/v2/addresses/${address}/transactions?${q}`;
@@ -147,17 +147,34 @@ const getHoldingPeriod = async (address: string) => {
   let holdingPeriodDays: any = [0];
   let date: null | Date = null;
 
-  data.items.reverse().forEach((item: any) => {
+  const filtered = data.items.reverse().filter((item: any) => {
+    if (item.to && item.to.hash && item.to.hash.toLowerCase() === stRif.toLowerCase()){
+      if (item.method === 'depositAndDelegate' || item.method === 'withdrawTo' || item.method === 'transfer') {
+        return true;
+      }
+      return false; 
+    } else {
+      return false; 
+    }
+  });
+
+  filtered.forEach((item: any, i: number) => {
     if (item.to && item.to.hash && item.to.hash.toLowerCase() === stRif.toLowerCase()) {
 
       if (item.method === 'depositAndDelegate') {
-        //console.log('depositAndDelegate', item.timestamp);
+          console.log('depositAndDelegate', item.timestamp);
         // save mint date
         date = new Date(item.timestamp);
+        if (i === (filtered.length - 1)) {
+          const days = datesDiffInDays(date, new Date());
+  
+          holdingPeriodDays.push(days);
+        }
+
       }
   
       if (item.method === 'withdrawTo') {
-        //console.log('withdrawTo', item.timestamp);
+         console.log('withdrawTo', item.timestamp);
         // 
         const withdrawDate = new Date(item.timestamp);
   
@@ -184,13 +201,17 @@ const getHoldingPeriod = async (address: string) => {
     }
 
   });
+  console.log('holdingPeriodDays', holdingPeriodDays);
+
+
+
 
   if (date && holdingPeriodDays.length === 1) {
     const days = datesDiffInDays(date, new Date());
   
     holdingPeriodDays.push(days);
   }
-
+  
   return Math.max(...holdingPeriodDays);
 }
 
